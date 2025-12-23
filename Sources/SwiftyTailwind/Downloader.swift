@@ -32,10 +32,20 @@ protocol Downloading {
     func download(version: TailwindVersion, directory: AbsolutePath, numRetries: Int) async throws -> AbsolutePath
 }
 
+/// A minimal protocol to abstract the network operations used by Downloader.
+protocol NetworkClient {
+    // Execute a simple GET request and return the full body as Data.
+    func get(url: String, headers: [(String, String)]?, timeoutSeconds: Int) async throws -> Data
+
+    // Download a file to a path, reporting progress.
+    func download(url: String, to destinationPath: String, progress: @escaping @Sendable (_ receivedBytes: Int64, _ totalBytes: Int64?) -> Void) async throws
+}
+
+
 final class Downloader: Downloading, @unchecked Sendable {
     let architectureDetector: ArchitectureDetecting
     let logger: Logger
-    let httpClient: HTTPClient
+    let network: NetworkClient
 
     /// Returns the default directory where Tailwind binaries should be downloaded.
     static func defaultDownloadDirectory() -> AbsolutePath {
@@ -45,10 +55,10 @@ final class Downloader: Downloading, @unchecked Sendable {
     static let sha256FileName: String = "sha256sums.txt"
     static let checksumValidator: ChecksumValidating = ChecksumValidation()
 
-    init(architectureDetector: ArchitectureDetecting = ArchitectureDetector(), httpClient: HTTPClient = HTTPClient(eventLoopGroupProvider: .singleton)) {
+    init(architectureDetector: ArchitectureDetecting = ArchitectureDetector(), network: NetworkClient = HTTPNetworkClient(httpClient: HTTPClient(eventLoopGroupProvider: .singleton))) {
         self.architectureDetector = architectureDetector
         self.logger = Logger(label: "io.tuist.SwiftyTailwind.Downloader")
-        self.httpClient = httpClient
+        self.network = network
     }
 
     func download() async throws -> TSCBasic.AbsolutePath {
@@ -97,30 +107,12 @@ final class Downloader: Downloading, @unchecked Sendable {
         }
         let url = "https://github.com/tailwindlabs/tailwindcss/releases/download/\(version)/\(name)"
         logger.debug("Downloading binary \(name) from version \(version)...")
-        let request = try HTTPClient.Request(url: url)
-        // Capture the logger by value to avoid capturing `self` in a @Sendable closure
         let progressLogger = self.logger
-        let delegate = try FileDownloadDelegate(path: downloadPath.pathString, reportProgress: { [progressLogger] progress in
-            if let totalBytes = progress.totalBytes {
-                progressLogger.debug("Total bytes count: \(totalBytes)")
-            }
-            progressLogger.debug("Downloaded \(progress.receivedBytes) bytes so far")
+        try await network.download(url: url, to: downloadPath.pathString, progress: { received, total in
+            if let total { progressLogger.debug("Total bytes count: \(total)") }
+            progressLogger.debug("Downloaded \(received) bytes so far")
         })
-        do {
-            try await withCheckedThrowingContinuation { continuation in
-                httpClient.execute(request: request, delegate: delegate).futureResult.whenComplete { result in
-                    switch result {
-                    case .success(_):
-                        try? localFileSystem.chmod(.executable, path: downloadPath)
-                        continuation.resume()
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
-        } catch {
-            throw error
-        }
+        try? localFileSystem.chmod(.executable, path: downloadPath)
     }
 
     private func downloadChecksumFile(version: String, into downloadPath: AbsolutePath) async throws {
@@ -149,13 +141,9 @@ final class Downloader: Downloading, @unchecked Sendable {
         var tagName: String?
 
         do {
-            var request = HTTPClientRequest(url: latestReleaseURL)
-            request.headers.add(name: "Content-Type", value: "application/json")
-            request.headers.add(name: "User-Agent", value: "io.tuist.SwiftyTailwind")
-
-            let response = try await httpClient.execute(request, timeout: .seconds(30))
-            let body = try await response.body.collect(upTo: 1024 * 1024)
-            let data = Data(buffer: body)
+            let data = try await network.get(url: latestReleaseURL,
+                                             headers: [("Content-Type", "application/json"), ("User-Agent", "io.tuist.SwiftyTailwind")],
+                                             timeoutSeconds: 30)
 
             let any = try JSONSerialization.jsonObject(with: data)
             guard let json = any as? [String: Any] else {
