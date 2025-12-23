@@ -1,26 +1,24 @@
 # SwiftyTailwind 🍃
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-3-orange.svg?style=flat-square)](#contributors-)
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
 
-[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Ftuist%2FSwiftyTailwind%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/tuist/SwiftyTailwind)
-[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Ftuist%2FSwiftyTailwind%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/tuist/SwiftyTailwind)
-[![SwiftyTailwind](https://github.com/tuist/SwiftyTailwind/actions/workflows/SwiftyTailwind.yml/badge.svg)](https://github.com/tuist/SwiftyTailwind/actions/workflows/SwiftyTailwind.yml)
+**SwiftyTailwind** is a Swift package that allows you to download and run the
+[Tailwind CSS](https://tailwindcss.com) CLI directly from a Swift project.
 
-> [!IMPORTANT]
-> This project is not actively maintained. If you need improvements or fixes, we recommend forking it.
+It is commonly used with server-side Swift frameworks such as
+[Vapor](https://vapor.codes) to generate and watch Tailwind CSS styles during development.
 
-**SwiftyTailwind** is a Swift Package to lazily download and run the [Tailwind](https://tailwindcss.com) CLI from a Swift project (e.g. [Vapor](https://vapor.codes) app or [Publish](https://github.com/JohnSundell/Publish) project). 
+This repository is a maintained fork adapted for modern Vapor workflows.
+
+---
 
 ## Usage
 
-First, you need to add `SwiftyTailwind` as a dependency in your project's `Package.swift`:
+Add `SwiftyTailwind` as a dependency in your project's `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/tuist/SwiftyTailwind.git", .upToNextMinor(from: "0.5.0"))
+.package(url: "https://github.com/Bilalyyy/SwiftyTailwind.git", from: "0.5.0")
 ```
 
-Once added, you'll create an instance of `SwiftyTailwind` specifying the version you'd like to use and where you'd like it to be downloaded.
+Then create an instance of SwiftyTailwind:
 
 ```swift
 let tailwind = SwiftyTailwind(version: .latest, directory: "./cache")
@@ -137,26 +135,10 @@ and then in `entrypoint.swift`, replace `try await app.execute()` with:
 The check for `migrate` in the arguments will ensure that it doesn't run when doing migrations in development.
 Additionally, it may be a good idea to setup a script to minify the CSS before deploying to production.
 
-## Contributors ✨
+## Credits
 
-Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+This project is based on the original [SwiftyTailwind](https://vapor.codes](https://github.com/tuist/SwiftyTailwind)) package by Tuist
+and its contributors.
 
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/csjones"><img src="https://avatars.githubusercontent.com/u/637026?v=4?s=100" width="100px;" alt="Chris"/><br /><sub><b>Chris</b></sub></a><br /><a href="#content-csjones" title="Content">🖋</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/wSedlacek"><img src="https://avatars.githubusercontent.com/u/8206108?v=4?s=100" width="100px;" alt="William Sedlacek"/><br /><sub><b>William Sedlacek</b></sub></a><br /><a href="https://github.com/tuist/SwiftyTailwind/commits?author=wSedlacek" title="Documentation">📖</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="http://www.bradyklein.com"><img src="https://avatars.githubusercontent.com/u/31358894?v=4?s=100" width="100px;" alt="Brady Klein"/><br /><sub><b>Brady Klein</b></sub></a><br /><a href="https://github.com/tuist/SwiftyTailwind/commits?author=bklein18" title="Code">💻</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
+This fork exists to maintain and adapt the package for modern Vapor
+projects.
