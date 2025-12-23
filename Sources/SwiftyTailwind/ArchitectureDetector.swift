@@ -3,11 +3,11 @@ import TSCBasic
 import TSCUtility
 
 public enum CpuArchitecture: String, Hashable  {
-    case aarch64   = "aarch64"
-    case arm64   = "arm64"
-    case armv7   = "armv7"
-    case x86_64   = "x86_64"
-    
+    case aarch64 = "aarch64"
+    case arm64 = "arm64"
+    case armv7 = "armv7"
+    case x86_64 = "x86_64"
+
     var tailwindValue: String {
         switch self {
         case .arm64, .aarch64: return "arm64"
@@ -17,13 +17,10 @@ public enum CpuArchitecture: String, Hashable  {
     }
 }
 
-/**
- A protocol that declares an interface to obtain the CPU architecture of the environment in which the program is running.
- */
+
+/// A protocol that declares an interface to obtain the CPU architecture of the environment in which the program is running.
 protocol ArchitectureDetecting {
-    /**
-        It returns the architecture if it can be obtained and nil otherwise.
-     */
+    /// It returns the architecture if it can be obtained and nil otherwise.
     func architecture() -> CpuArchitecture?
 }
 

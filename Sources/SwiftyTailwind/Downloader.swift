@@ -5,13 +5,10 @@ import AsyncHTTPClient
 import NIOCore
 import NIOFoundationCompat
 
-/*
- An enum that represents the various errors that the `Downloader` can throw.
- */
+
+/// An enum that represents the various errors that the `Downloader` can throw.
 enum DownloaderError: LocalizedError {
-    /**
-     This error is thrown when the binary name cannot be determined.
-     */
+     // This error is thrown when the binary name cannot be determined.
     case unableToDetermineBinaryName
     case checksumIsIncorrect
     case errorReadingFilesForChecksumValidation
@@ -29,43 +26,48 @@ enum DownloaderError: LocalizedError {
 }
 
 protocol Downloading {
-    /**
-     It downloads the latest version of Tailwind in a default directory.
-     */
+    /// It downloads the latest version of Tailwind in a default directory.
     func download() async throws -> AbsolutePath
-    /**
-     It downloads the given version of Tailwind in the given directory.
-     */
+    /// It downloads the given version of Tailwind in the given directory.
     func download(version: TailwindVersion, directory: AbsolutePath, numRetries: Int) async throws -> AbsolutePath
 }
 
-class Downloader: Downloading {
+/// A minimal protocol to abstract the network operations used by Downloader.
+protocol NetworkClient {
+    // Execute a simple GET request and return the full body as Data.
+    func get(url: String, headers: [(String, String)]?, timeoutSeconds: Int) async throws -> Data
+
+    // Download a file to a path, reporting progress.
+    func download(url: String, to destinationPath: String, progress: @escaping @Sendable (_ receivedBytes: Int64, _ totalBytes: Int64?) -> Void) async throws
+}
+
+
+final class Downloader: Downloading, @unchecked Sendable {
     let architectureDetector: ArchitectureDetecting
     let logger: Logger
-    
-    /**
-     Returns the default directory where Tailwind binaries should be downloaded.
-     */
+    let network: NetworkClient
+
+    /// Returns the default directory where Tailwind binaries should be downloaded.
     static func defaultDownloadDirectory() -> AbsolutePath {
         return try! localFileSystem.tempDirectory.appending(component: "SwiftyTailwind")
     }
-    
+
     static let sha256FileName: String = "sha256sums.txt"
     static let checksumValidator: ChecksumValidating = ChecksumValidation()
-    
-    init(architectureDetector: ArchitectureDetecting = ArchitectureDetector()) {
+
+    init(architectureDetector: ArchitectureDetecting = ArchitectureDetector(), network: NetworkClient = HTTPNetworkClient(httpClient: HTTPClient(eventLoopGroupProvider: .singleton))) {
         self.architectureDetector = architectureDetector
         self.logger = Logger(label: "io.tuist.SwiftyTailwind.Downloader")
+        self.network = network
     }
-    
+
     func download() async throws -> TSCBasic.AbsolutePath {
         try await download(version: .latest, directory: Downloader.defaultDownloadDirectory())
     }
-    
+
     func download(version: TailwindVersion,
                   directory: AbsolutePath,
-                  numRetries: Int = 0) async throws -> AbsolutePath
-    {
+                  numRetries: Int = 0) async throws -> AbsolutePath {
         guard let binaryName = binaryName() else {
             throw DownloaderError.unableToDetermineBinaryName
         }
@@ -78,7 +80,6 @@ class Downloader: Downloading {
         do {
             let binaryChecksum = try Self.checksumValidator.generateChecksumFrom(binaryPath)
             guard try Self.checksumValidator.compareChecksum(from: checksumPath, to: binaryChecksum) else {
-                
                 if numRetries < 5 {
                     // retry download
                     logger.error("Checksum validation failed. Attempt #\(numRetries + 1) to retry download...")
@@ -96,82 +97,53 @@ class Downloader: Downloading {
         }
         return binaryPath
     }
-    
-    private func downloadBinary(name: String, version: String, to downloadPath: AbsolutePath) async throws {
+
+    private func downloadBinary(name: String,
+                                version: String,
+                                to downloadPath: AbsolutePath) async throws {
         if !localFileSystem.exists(downloadPath.parentDirectory) {
             logger.debug("Creating directory \(downloadPath.parentDirectory)")
             try localFileSystem.createDirectory(downloadPath.parentDirectory, recursive: true)
         }
         let url = "https://github.com/tailwindlabs/tailwindcss/releases/download/\(version)/\(name)"
         logger.debug("Downloading binary \(name) from version \(version)...")
-        let client = HTTPClient(eventLoopGroupProvider: .singleton)
-        let request = try HTTPClient.Request(url: url)
-        let delegate = try FileDownloadDelegate(path: downloadPath.pathString, reportProgress: { [weak self] in
-            if let totalBytes = $0.totalBytes {
-                self?.logger.debug("Total bytes count: \(totalBytes)")
-            }
-            self?.logger.debug("Downloaded \($0.receivedBytes) bytes so far")
+        let progressLogger = self.logger
+        try await network.download(url: url, to: downloadPath.pathString, progress: { received, total in
+            if let total { progressLogger.debug("Total bytes count: \(total)") }
+            progressLogger.debug("Downloaded \(received) bytes so far")
         })
-        do {
-            try await withCheckedThrowingContinuation { continuation in
-                client.execute(request: request, delegate: delegate).futureResult.whenComplete { result in
-                    switch result {
-                    case .success(_):
-                        try? localFileSystem.chmod(.executable, path: downloadPath)
-                        continuation.resume()
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
-        } catch {
-            try await client.shutdown()
-            throw error
-        }
-        try await client.shutdown()
+        try? localFileSystem.chmod(.executable, path: downloadPath)
     }
-    
+
     private func downloadChecksumFile(version: String, into downloadPath: AbsolutePath) async throws {
         try await downloadBinary(name: Self.sha256FileName, version: version, to: downloadPath)
     }
-    
-    /**
-     Returns the version that should be downloaded.
-     */
+
+    /// Returns the version that should be downloaded.
     private func versionToDownload(version: TailwindVersion) async throws -> String {
         switch version {
         case .fixed(let rawVersion):
             if rawVersion.starts(with: "v") {
                 return rawVersion
             } else {
-                /**
-                 Releases on GitHub are prefixed with "v" so we need to include it.
-                 */
+                // Releases on GitHub are prefixed with "v" so we need to include it.
                 return "v\(rawVersion)"
             }
         case .latest: return try await latestVersion()
         }
     }
-    
-    /**
-     It obtains the latest available release from GitHub releases
-     */
+
+    /// It obtains the latest available release from GitHub releases
     private func latestVersion() async throws -> String {
         let latestReleaseURL = "https://api.github.com/repos/tailwindlabs/tailwindcss/releases/latest"
         logger.debug("Getting the latest Tailwind version from \(latestReleaseURL)")
-        
-        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
-        
+
         var tagName: String?
 
         do {
-            var request = HTTPClientRequest(url: latestReleaseURL)
-            request.headers.add(name: "Content-Type", value: "application/json")
-            request.headers.add(name: "User-Agent", value: "io.tuist.SwiftyTailwind")
-
-            let response = try await httpClient.execute(request, timeout: .seconds(30))
-            let body = try await response.body.collect(upTo: 1024 * 1024)
-            let data = Data(buffer: body)
+            let data = try await network.get(url: latestReleaseURL,
+                                             headers: [("Content-Type", "application/json"), ("User-Agent", "io.tuist.SwiftyTailwind")],
+                                             timeoutSeconds: 30)
 
             let any = try JSONSerialization.jsonObject(with: data)
             guard let json = any as? [String: Any] else {
@@ -183,21 +155,17 @@ class Downloader: Downloading {
             tagName = parsedTag
             logger.debug("The latest Tailwind version available is \(parsedTag)")
         } catch {
-            try await httpClient.shutdown()
             throw error
         }
-
-        try await httpClient.shutdown()
 
         guard let tagName else {
             throw LatestReleaseError.missingTagName
         }
         return tagName
     }
-    
-    /**
-        It returns the name of the artifact that we should pull from the GitHub release. The artifact follows the convention: tailwindcss-{os}-{arch}
-     */
+
+    /// It returns the name of the artifact that we should pull from the GitHub release.
+    /// The artifact follows the convention: tailwindcss-{os}-{arch}
     private func binaryName() -> String? {
         guard let architecture = architectureDetector.architecture()?.tailwindValue else {
             return nil
@@ -215,3 +183,4 @@ class Downloader: Downloading {
         return "tailwindcss-\(os as String)-\(architecture)\(ext as String)"
     }
 }
+
