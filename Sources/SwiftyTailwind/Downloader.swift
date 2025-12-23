@@ -32,7 +32,7 @@ protocol Downloading {
     func download(version: TailwindVersion, directory: AbsolutePath, numRetries: Int) async throws -> AbsolutePath
 }
 
-class Downloader: Downloading {
+final class Downloader: Downloading, @unchecked Sendable {
     let architectureDetector: ArchitectureDetecting
     let logger: Logger
     let httpClient: HTTPClient
@@ -98,11 +98,13 @@ class Downloader: Downloading {
         let url = "https://github.com/tailwindlabs/tailwindcss/releases/download/\(version)/\(name)"
         logger.debug("Downloading binary \(name) from version \(version)...")
         let request = try HTTPClient.Request(url: url)
-        let delegate = try FileDownloadDelegate(path: downloadPath.pathString, reportProgress: { [weak self] in
-            if let totalBytes = $0.totalBytes {
-                self?.logger.debug("Total bytes count: \(totalBytes)")
+        // Capture the logger by value to avoid capturing `self` in a @Sendable closure
+        let progressLogger = self.logger
+        let delegate = try FileDownloadDelegate(path: downloadPath.pathString, reportProgress: { [progressLogger] progress in
+            if let totalBytes = progress.totalBytes {
+                progressLogger.debug("Total bytes count: \(totalBytes)")
             }
-            self?.logger.debug("Downloaded \($0.receivedBytes) bytes so far")
+            progressLogger.debug("Downloaded \(progress.receivedBytes) bytes so far")
         })
         do {
             try await withCheckedThrowingContinuation { continuation in
@@ -193,3 +195,4 @@ class Downloader: Downloading {
         return "tailwindcss-\(os as String)-\(architecture)\(ext as String)"
     }
 }
+
