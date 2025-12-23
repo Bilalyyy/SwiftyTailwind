@@ -1,8 +1,9 @@
 import TSCBasic
 
-/**
- This class is the main interface to download and run [Tailwind](https://tailwindcss.com) from a Swift project. Every function of the interface we'll lazily download a portable Tailwind executable, which includes the [NodeJS](https://nodejs.org/en) runtime, and invoke it using system processes.
- */
+
+/// This class is the main interface to download and run [Tailwind](https://tailwindcss.com) from a Swift project.
+/// Every function of the interface we'll lazily download a portable Tailwind executable,
+/// which includes the [NodeJS](https://nodejs.org/en) runtime, and invoke it using system processes.
 public class SwiftyTailwind {
     private let version: TailwindVersion
     private let directory: AbsolutePath
