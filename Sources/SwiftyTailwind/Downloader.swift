@@ -104,7 +104,7 @@ class Downloader: Downloading {
         }
         let url = "https://github.com/tailwindlabs/tailwindcss/releases/download/\(version)/\(name)"
         logger.debug("Downloading binary \(name) from version \(version)...")
-        let client = HTTPClient(eventLoopGroupProvider: .createNew)
+        let client = HTTPClient(eventLoopGroupProvider: .singleton)
         let request = try HTTPClient.Request(url: url)
         let delegate = try FileDownloadDelegate(path: downloadPath.pathString, reportProgress: { [weak self] in
             if let totalBytes = $0.totalBytes {
@@ -160,25 +160,38 @@ class Downloader: Downloading {
         let latestReleaseURL = "https://api.github.com/repos/tailwindlabs/tailwindcss/releases/latest"
         logger.debug("Getting the latest Tailwind version from \(latestReleaseURL)")
         
-        let httpClient = HTTPClient(eventLoopGroupProvider: .createNew)
+        let httpClient = HTTPClient(eventLoopGroupProvider: .singleton)
         
-        var tagName: String!
+        var tagName: String?
+
         do {
             var request = HTTPClientRequest(url: latestReleaseURL)
             request.headers.add(name: "Content-Type", value: "application/json")
             request.headers.add(name: "User-Agent", value: "io.tuist.SwiftyTailwind")
+
             let response = try await httpClient.execute(request, timeout: .seconds(30))
             let body = try await response.body.collect(upTo: 1024 * 1024)
-            let json = try! JSONSerialization.jsonObject(with: Data(buffer: body)) as! [String: Any]
-            tagName = json["tag_name"] as! String
-            logger.debug("The latest Tailwind version available is \(tagName!)")
+            let data = Data(buffer: body)
+
+            let any = try JSONSerialization.jsonObject(with: data)
+            guard let json = any as? [String: Any] else {
+                throw LatestReleaseError.invalidJSON
+            }
+            guard let parsedTag = json["tag_name"] as? String, !parsedTag.isEmpty else {
+                throw LatestReleaseError.missingTagName
+            }
+            tagName = parsedTag
+            logger.debug("The latest Tailwind version available is \(parsedTag)")
         } catch {
             try await httpClient.shutdown()
             throw error
         }
-        
+
         try await httpClient.shutdown()
-        
+
+        guard let tagName else {
+            throw LatestReleaseError.missingTagName
+        }
         return tagName
     }
     
