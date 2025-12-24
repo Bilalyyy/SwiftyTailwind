@@ -59,6 +59,7 @@ final class Executor: Executing, @unchecked Sendable {
                                         }
                                       ), startNewProcessGroup: false)
                 do {
+                    try process.launch()
                     let status = try process.waitUntilExit().exitStatus
 
                     switch status {
