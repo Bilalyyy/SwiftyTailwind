@@ -13,6 +13,7 @@ final class SwiftyTailwindTests: XCTestCase {
             let inputCSSPath = tmpDir.appending(component: "input.css")
             let inputCSSContent = """
             @tailwind components;
+            @tailwind utilities;
             
             p {
                 @apply font-bold;
@@ -28,7 +29,7 @@ final class SwiftyTailwindTests: XCTestCase {
             // Then
             let content = String(bytes: try localFileSystem.readFileContents(outputCSSPath).contents, encoding: .utf8)
             XCTAssertTrue(localFileSystem.exists(outputCSSPath))
-            XCTAssertTrue(content?.contains("font-weight: 700") != nil)
+            XCTAssertTrue(content?.contains("font-weight: 700") == true)
         })
     }
 }
