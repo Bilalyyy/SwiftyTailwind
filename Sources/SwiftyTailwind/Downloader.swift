@@ -55,7 +55,7 @@ final class Downloader: Downloading, @unchecked Sendable {
     static let sha256FileName: String = "sha256sums.txt"
     static let checksumValidator: ChecksumValidating = ChecksumValidation()
 
-    init(architectureDetector: ArchitectureDetecting = ArchitectureDetector(), network: NetworkClient = HTTPNetworkClient(httpClient: HTTPClient(eventLoopGroupProvider: .singleton))) {
+    init(architectureDetector: ArchitectureDetecting = ArchitectureDetector(), network: NetworkClient = HTTPNetworkClient(httpClient: HTTPClient(eventLoopGroupProvider: .singleton), ownsHTTPClient: true)) {
         self.architectureDetector = architectureDetector
         self.logger = Logger(label: "io.tuist.SwiftyTailwind.Downloader")
         self.network = network

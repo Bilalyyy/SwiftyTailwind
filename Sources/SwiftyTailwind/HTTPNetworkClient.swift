@@ -7,11 +7,24 @@ import NIOHTTP1
 /// Concrete implementation of `NetworkClient` backed by AsyncHTTPClient.
 final class HTTPNetworkClient: NetworkClient, @unchecked Sendable {
     private let httpClient: HTTPClient
+    private let ownsHTTPClient: Bool
 
     /// Initialize with an existing HTTPClient or create your own.
-    /// - Parameter httpClient: The HTTPClient instance to use. The caller owns the lifecycle.
-    init(httpClient: HTTPClient) {
+    /// - Parameters:
+    ///   - httpClient: The HTTPClient instance to use.
+    ///   - ownsHTTPClient: Whether this instance is responsible for shutting down the client.
+    init(httpClient: HTTPClient, ownsHTTPClient: Bool = false) {
         self.httpClient = httpClient
+        self.ownsHTTPClient = ownsHTTPClient
+    }
+
+    deinit {
+        guard ownsHTTPClient else { return }
+        do {
+            try httpClient.syncShutdown()
+        } catch {
+            // Best-effort shutdown to avoid leaking resources.
+        }
     }
 
     /// Execute a simple GET request and return the full body as Data.

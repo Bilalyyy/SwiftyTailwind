@@ -42,10 +42,19 @@ public class SwiftyTailwind {
     /// - options: A set of ``SwiftyTailwind.InitializeOption`` options to customize the initialization.
     public func initialize(directory: AbsolutePath = localFileSystem.currentWorkingDirectory!,
                            options: InitializeOption...) async throws {
+        let options = Array(options)
         var arguments = ["init"]
         arguments.append(contentsOf: options.executableFlags)
         let executablePath = try await download()
-        try await executor.run(executablePath: executablePath, directory: directory, arguments: arguments)
+        do {
+            try await executor.run(executablePath: executablePath, directory: directory, arguments: arguments)
+        } catch {
+            if shouldFallbackInit(error) {
+                try writeConfigFiles(directory: directory, options: options)
+                return
+            }
+            throw error
+        }
     }
 
     /// It runs the main Tailwind command.
@@ -68,6 +77,70 @@ public class SwiftyTailwind {
     /// Downloads the Tailwind portable executable
     private func download() async throws -> AbsolutePath {
         try await downloader.download(version: version, directory: directory, numRetries: 0)
+    }
+
+    private func shouldFallbackInit(_ error: Error) -> Bool {
+        let message = error.localizedDescription.lowercased()
+        return message.contains("invalid command: init")
+            || message.contains("unknown command: init")
+            || message.contains("unknown command \"init\"")
+    }
+
+    private func writeConfigFiles(directory: AbsolutePath, options: [InitializeOption]) throws {
+        let configPath = directory.appending(component: configFileName(options: options))
+        if !localFileSystem.exists(configPath) {
+            let contents = configFileContents(options: options)
+            try localFileSystem.writeFileContents(configPath, bytes: ByteString(contents.utf8))
+        }
+
+        if options.contains(.postcss) {
+            let postcssPath = directory.appending(component: "postcss.config.js")
+            if !localFileSystem.exists(postcssPath) {
+                let contents = """
+                module.exports = {
+                  plugins: {
+                    tailwindcss: {},
+                    autoprefixer: {},
+                  },
+                }
+                """
+                try localFileSystem.writeFileContents(postcssPath, bytes: ByteString(contents.utf8))
+            }
+        }
+    }
+
+    private func configFileName(options: [InitializeOption]) -> String {
+        if options.contains(.ts) {
+            return "tailwind.config.ts"
+        }
+        return "tailwind.config.js"
+    }
+
+    private func configFileContents(options: [InitializeOption]) -> String {
+        if options.contains(.ts) {
+            return """
+            import type { Config } from "tailwindcss"
+
+            export default {
+              content: [],
+              theme: {
+                extend: {},
+              },
+              plugins: [],
+            } satisfies Config
+            """
+        }
+
+        let exportLine = options.contains(.esm) ? "export default" : "module.exports ="
+        return """
+        \(exportLine) {
+          content: [],
+          theme: {
+            extend: {},
+          },
+          plugins: [],
+        }
+        """
     }
 }
 
