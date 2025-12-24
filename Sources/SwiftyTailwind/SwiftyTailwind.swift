@@ -1,4 +1,5 @@
 import TSCBasic
+import Logging
 
 
 /// This class is the main interface to download and run [Tailwind](https://tailwindcss.com) from a Swift project.
@@ -9,6 +10,7 @@ public class SwiftyTailwind {
     private let directory: AbsolutePath
     private let downloader: Downloading
     private let executor: Executing
+    private let logger: Logger
 
     /// Default initializer.
     /// - Parameters:
@@ -34,6 +36,7 @@ public class SwiftyTailwind {
         self.directory = directory
         self.downloader = downloader
         self.executor = executor
+        self.logger = Logger(label: "io.tuist.SwiftyTailwind")
     }
 
     @available(*, deprecated, message: "Tailwind v4 no longer supports `tailwindcss init`. This method is deprecated and will be removed in a future release. Create your config manually or via your own template.")
@@ -56,14 +59,18 @@ public class SwiftyTailwind {
                     output: AbsolutePath,
                     directory: AbsolutePath = localFileSystem.currentWorkingDirectory!,
                     options: RunOption...) async throws {
+        logger.info("Preparing to run Tailwind CLI.")
         var arguments: [String] = [
             "--input", input.pathString,
             "--output", output.pathString
         ]
         arguments.append(contentsOf: options.executableFlags)
         if (!options.contains(.autoPrefixer)) { arguments.append("--no-autoprefixer")}
+        logger.info("Resolving Tailwind CLI binary (this may take a moment on first run)...")
         let executablePath = try await download()
+        logger.info("Using Tailwind CLI at \(executablePath.pathString)")
         try await executor.run(executablePath: executablePath, directory: directory, arguments: arguments)
+        logger.info("Tailwind CLI finished successfully.")
     }
     /// Downloads the Tailwind portable executable
     private func download() async throws -> AbsolutePath {
@@ -211,4 +218,3 @@ public extension SwiftyTailwind {
         }
     }
 }
-

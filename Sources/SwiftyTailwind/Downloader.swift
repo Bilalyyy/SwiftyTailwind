@@ -73,11 +73,16 @@ final class Downloader: Downloading, @unchecked Sendable {
         }
         let expectedVersion = try await versionToDownload(version: version)
         let binaryPath = directory.appending(components: [expectedVersion, binaryName])
-        if localFileSystem.exists(binaryPath) { return binaryPath }
+        if localFileSystem.exists(binaryPath) {
+            logger.info("Using cached Tailwind binary at \(binaryPath.pathString)")
+            return binaryPath
+        }
+        logger.info("Tailwind binary not found locally. Downloading \(binaryName) (\(expectedVersion))...")
         try await downloadBinary(name: binaryName, version: expectedVersion, to: binaryPath)
         let checksumPath = directory.appending(components: [expectedVersion, Self.sha256FileName])
         try await downloadChecksumFile(version: expectedVersion, into: checksumPath)
         do {
+            logger.info("Validating checksum for Tailwind \(expectedVersion)...")
             let binaryChecksum = try Self.checksumValidator.generateChecksumFrom(binaryPath)
             guard try Self.checksumValidator.compareChecksum(from: checksumPath, to: binaryChecksum) else {
                 if numRetries < 5 {
@@ -92,6 +97,7 @@ final class Downloader: Downloading, @unchecked Sendable {
             logger.error("Error accessing checksum file or binary for checksum validation. Error: \(error.localizedDescription)")
             throw error
         }
+        logger.info("Checksum validation succeeded for Tailwind \(expectedVersion).")
         return binaryPath
     }
 
@@ -103,12 +109,23 @@ final class Downloader: Downloading, @unchecked Sendable {
             try localFileSystem.createDirectory(downloadPath.parentDirectory, recursive: true)
         }
         let url = "https://github.com/tailwindlabs/tailwindcss/releases/download/\(version)/\(name)"
-        logger.debug("Downloading binary \(name) from version \(version)...")
+        logger.info("Downloading binary \(name) from version \(version)...")
         let progressLogger = self.logger
+        var lastLoggedPercent: Int64 = -1
+        var lastLoggedBytes: Int64 = 0
         try await network.download(url: url, to: downloadPath.pathString, progress: { received, total in
-            if let total { progressLogger.debug("Total bytes count: \(total)") }
-            progressLogger.debug("Downloaded \(received) bytes so far")
+            if let total {
+                let percent = Int64((Double(received) / Double(total)) * 100.0)
+                if percent >= lastLoggedPercent + 10 {
+                    lastLoggedPercent = percent
+                    progressLogger.info("Download progress: \(percent)% (\(received)/\(total) bytes)")
+                }
+            } else if received >= lastLoggedBytes + 5_000_000 {
+                lastLoggedBytes = received
+                progressLogger.info("Downloaded \(received) bytes so far")
+            }
         })
+        logger.info("Finished downloading \(name) to \(downloadPath.pathString)")
         try? localFileSystem.chmod(.executable, path: downloadPath)
     }
 
@@ -133,7 +150,7 @@ final class Downloader: Downloading, @unchecked Sendable {
     /// It obtains the latest available release from GitHub releases
     private func latestVersion() async throws -> String {
         let latestReleaseURL = "https://api.github.com/repos/tailwindlabs/tailwindcss/releases/latest"
-        logger.debug("Getting the latest Tailwind version from \(latestReleaseURL)")
+        logger.info("Fetching the latest Tailwind version from \(latestReleaseURL)")
 
         var tagName: String?
 
