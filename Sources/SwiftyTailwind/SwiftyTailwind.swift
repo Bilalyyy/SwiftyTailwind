@@ -43,7 +43,7 @@ public class SwiftyTailwind {
     public func initialize(directory: AbsolutePath = localFileSystem.currentWorkingDirectory!,
                            options: InitializeOption...) async throws {
         var arguments = ["init"]
-        arguments.append(contentsOf: Set(options).executableFlags)
+        arguments.append(contentsOf: options.executableFlags)
         let executablePath = try await download()
         try await executor.run(executablePath: executablePath, directory: directory, arguments: arguments)
     }
@@ -60,7 +60,7 @@ public class SwiftyTailwind {
             "--input", input.pathString,
             "--output", output.pathString
         ]
-        arguments.append(contentsOf: Set(options).executableFlags)
+        arguments.append(contentsOf: options.executableFlags)
         if (!options.contains(.autoPrefixer)) { arguments.append("--no-autoprefixer")}
         let executablePath = try await download()
         try await executor.run(executablePath: executablePath, directory: directory, arguments: arguments)
@@ -71,14 +71,14 @@ public class SwiftyTailwind {
     }
 }
 
-extension Set where Element == SwiftyTailwind.InitializeOption {
+extension Array where Element == SwiftyTailwind.InitializeOption {
     /// Returns the flags to pass to the Tailwind CLI when invoking the `init` command.
     var executableFlags: [String] {
         return self.map(\.flag)
     }
 }
 
-extension Set where Element == SwiftyTailwind.RunOption {
+extension Array where Element == SwiftyTailwind.RunOption {
     /// Returns the flags to pass to the Tailwind CLI when invoking the `init` command.
     var executableFlags: [String] {
         return self.map(\.flag).flatMap({$0})
