@@ -36,7 +36,7 @@ public class SwiftyTailwind {
         self.directory = directory
         self.downloader = downloader
         self.executor = executor
-        self.logger = Logger(label: "io.tuist.SwiftyTailwind")
+        self.logger = Logger(label: "com.app-soon.SwiftyTailwind")
     }
 
     @available(*, deprecated, message: "Tailwind v4 no longer supports `tailwindcss init`. This method is deprecated and will be removed in a future release. Create your config manually or via your own template.")

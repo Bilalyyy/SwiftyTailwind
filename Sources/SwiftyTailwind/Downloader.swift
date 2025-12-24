@@ -57,7 +57,7 @@ final class Downloader: Downloading, @unchecked Sendable {
 
     init(architectureDetector: ArchitectureDetecting = ArchitectureDetector(), network: NetworkClient = HTTPNetworkClient(httpClient: HTTPClient(eventLoopGroupProvider: .singleton), ownsHTTPClient: true)) {
         self.architectureDetector = architectureDetector
-        self.logger = Logger(label: "io.tuist.SwiftyTailwind.Downloader")
+        self.logger = Logger(label: "com.app-soon.SwiftyTailwind.Downloader")
         self.network = network
     }
 
@@ -156,7 +156,7 @@ final class Downloader: Downloading, @unchecked Sendable {
 
         do {
             let data = try await network.get(url: latestReleaseURL,
-                                             headers: [("Content-Type", "application/json"), ("User-Agent", "io.tuist.SwiftyTailwind")],
+                                             headers: [("Content-Type", "application/json"), ("User-Agent", "com.app-soon.SwiftyTailwind")],
                                              timeoutSeconds: 30)
 
             let any = try JSONSerialization.jsonObject(with: data)

@@ -22,7 +22,7 @@ final class Executor: Executing, @unchecked Sendable {
     
     ///Creates a new instance of `Executor`
     init() {
-        self.logger = Logger(label: "io.tuist.SwiftyTailwind.Executor")
+        self.logger = Logger(label: "com.app-soon.SwiftyTailwind.Executor")
     }
 
     func run(executablePath: TSCBasic.AbsolutePath, directory: AbsolutePath, arguments: [String]) async throws {
@@ -69,7 +69,7 @@ final class Executor: Executing, @unchecked Sendable {
                         let stdoutString = String(data: capturedStdout, encoding: .utf8) ?? ""
                         let stderrString = String(data: capturedStderr, encoding: .utf8) ?? ""
                         let message = "Process exited with status: \(status).\nSTDOUT:\n\(stdoutString)\nSTDERR:\n\(stderrString)"
-                        continuation.resume(throwing: NSError(domain: "io.tuist.SwiftyTailwind.Executor", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
+                        continuation.resume(throwing: NSError(domain: "com.app-soon.SwiftyTailwind.Executor", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
                     }
                 } catch {
                     continuation.resume(throwing: error)
