@@ -45,8 +45,13 @@ final class HTTPNetworkClient: NetworkClient, @unchecked Sendable {
         let destinationURL = URL(fileURLWithPath: destinationPath)
         // Ensure parent directory exists
         try FileManager.default.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        // Ensure destination file exists
+        if !FileManager.default.fileExists(atPath: destinationURL.path) {
+            FileManager.default.createFile(atPath: destinationURL.path, contents: nil)
+        }
         // Write streaming body to file while reporting progress
         let handle = try FileHandle(forWritingTo: destinationURL)
+        try handle.truncate(atOffset: 0)
         defer { try? handle.close() }
 
         let total = response.headers.first(name: "Content-Length").flatMap(Int64.init)
@@ -110,4 +115,3 @@ final class HTTPNetworkClient: NetworkClient, @unchecked Sendable {
         }
     }
 }
-
