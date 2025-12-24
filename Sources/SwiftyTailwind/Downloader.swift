@@ -89,11 +89,8 @@ final class Downloader: Downloading, @unchecked Sendable {
                 }
             }
         } catch {
-            if error.localizedDescription == DownloaderError.checksumIsIncorrect.localizedDescription {
-                throw error
-            } else {
-                logger.error("Error accessing checksum file or binary for checksum validation. Error: \(error.localizedDescription)")
-            }
+            logger.error("Error accessing checksum file or binary for checksum validation. Error: \(error.localizedDescription)")
+            throw error
         }
         return binaryPath
     }
@@ -183,4 +180,3 @@ final class Downloader: Downloading, @unchecked Sendable {
         return "tailwindcss-\(os as String)-\(architecture)\(ext as String)"
     }
 }
-
