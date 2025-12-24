@@ -5,20 +5,6 @@ import TSCBasic
 final class SwiftyTailwindTests: XCTestCase {
     // TODO: These tests failed
 
-    func test_initialize() async throws {
-        try await withTemporaryDirectory(removeTreeOnDeinit: true, { tmpDir in
-            // Given
-            let subject = SwiftyTailwind(directory: tmpDir)
-
-            // When
-            try await subject.initialize(directory: tmpDir, options: .full)
-
-            // Then
-            let tailwindConfigPath = tmpDir.appending(component: "tailwind.config.js")
-            XCTAssertTrue(localFileSystem.exists(tailwindConfigPath))
-        })
-    }
-
     func test_run() async throws {
         try await withTemporaryDirectory(removeTreeOnDeinit: true, { tmpDir in
             // Given

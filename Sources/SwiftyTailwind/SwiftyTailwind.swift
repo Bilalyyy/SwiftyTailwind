@@ -36,25 +36,16 @@ public class SwiftyTailwind {
         self.executor = executor
     }
 
-    /// It runs the `init` command to create a Tailwind configuration file (i.e., `tailwind.config.js`)
-    /// - Parameters:
-    /// - directory: The directory in which the Tailwind configuration will be created. When not passed, it defaults to the working directory from where the process is running.
-    /// - options: A set of ``SwiftyTailwind.InitializeOption`` options to customize the initialization.
+    @available(*, deprecated, message: "Tailwind v4 no longer supports `tailwindcss init`. This method is deprecated and will be removed in a future release. Create your config manually or via your own template.")
     public func initialize(directory: AbsolutePath = localFileSystem.currentWorkingDirectory!,
                            options: InitializeOption...) async throws {
-        let options = Array(options)
-        var arguments = ["init"]
-        arguments.append(contentsOf: options.executableFlags)
-        let executablePath = try await download()
-        do {
-            try await executor.run(executablePath: executablePath, directory: directory, arguments: arguments)
-        } catch {
-            if shouldFallbackInit(error) {
-                try writeConfigFiles(directory: directory, options: options)
-                return
+        // Deprecated in Tailwind v4: the CLI no longer supports `init`.
+        struct InitializationDeprecatedError: Error, CustomStringConvertible {
+            var description: String {
+                "SwiftyTailwind.initialize is deprecated: Tailwind v4 removed the `init` command. Create your config manually."
             }
-            throw error
         }
+        throw InitializationDeprecatedError()
     }
 
     /// It runs the main Tailwind command.
@@ -220,3 +211,4 @@ public extension SwiftyTailwind {
         }
     }
 }
+
