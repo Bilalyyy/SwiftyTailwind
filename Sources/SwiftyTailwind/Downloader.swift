@@ -71,34 +71,60 @@ final class Downloader: Downloading, @unchecked Sendable {
         guard let binaryName = binaryName() else {
             throw DownloaderError.unableToDetermineBinaryName
         }
-        let expectedVersion = try await versionToDownload(version: version)
+
+        let expectedVersion: String
+        switch version {
+        case .fixed:
+            expectedVersion = try await versionToDownload(version: version)
+        case .latest:
+            do {
+                expectedVersion = try await versionToDownload(version: version)
+            } catch {
+                if let cachedBinary = cachedBinaryPath(binaryName: binaryName, in: directory) {
+                    logger.warning("Unable to fetch the latest Tailwind version. Falling back to cached binary at \(cachedBinary.pathString). Error: \(error.localizedDescription)")
+                    return cachedBinary
+                }
+                throw error
+            }
+        }
+
         let binaryPath = directory.appending(components: [expectedVersion, binaryName])
         if localFileSystem.exists(binaryPath) {
             logger.info("Using cached Tailwind binary at \(binaryPath.pathString)")
             return binaryPath
         }
         logger.info("Tailwind binary not found locally. Downloading \(binaryName) (\(expectedVersion))...")
-        try await downloadBinary(name: binaryName, version: expectedVersion, to: binaryPath)
-        let checksumPath = directory.appending(components: [expectedVersion, Self.sha256FileName])
-        try await downloadChecksumFile(version: expectedVersion, into: checksumPath)
         do {
-            logger.info("Validating checksum for Tailwind \(expectedVersion)...")
-            let binaryChecksum = try Self.checksumValidator.generateChecksumFrom(binaryPath)
-            guard try Self.checksumValidator.compareChecksum(from: checksumPath, to: binaryChecksum) else {
-                if numRetries < 5 {
-                    // retry download
-                    logger.error("Checksum validation failed. Attempt #\(numRetries + 1) to retry download...")
-                    return try await download(version: version, directory: directory, numRetries: numRetries + 1)
-                } else {
-                    throw DownloaderError.checksumIsIncorrect
+            try await downloadBinary(name: binaryName, version: expectedVersion, to: binaryPath)
+            let checksumPath = directory.appending(components: [expectedVersion, Self.sha256FileName])
+            try await downloadChecksumFile(version: expectedVersion, into: checksumPath)
+            do {
+                logger.info("Validating checksum for Tailwind \(expectedVersion)...")
+                let binaryChecksum = try Self.checksumValidator.generateChecksumFrom(binaryPath)
+                guard try Self.checksumValidator.compareChecksum(from: checksumPath, to: binaryChecksum) else {
+                    try? FileManager.default.removeItem(atPath: binaryPath.pathString)
+                    if numRetries < 5 {
+                        // retry download
+                        logger.error("Checksum validation failed. Attempt #\(numRetries + 1) to retry download...")
+                        return try await download(version: version, directory: directory, numRetries: numRetries + 1)
+                    } else {
+                        throw DownloaderError.checksumIsIncorrect
+                    }
                 }
+            } catch {
+                logger.error("Error accessing checksum file or binary for checksum validation. Error: \(error.localizedDescription)")
+                throw error
             }
+            logger.info("Checksum validation succeeded for Tailwind \(expectedVersion).")
+            return binaryPath
         } catch {
-            logger.error("Error accessing checksum file or binary for checksum validation. Error: \(error.localizedDescription)")
+            if case .latest = version,
+               let cachedBinary = cachedBinaryPath(binaryName: binaryName, in: directory, excluding: expectedVersion) {
+                logger.warning("Unable to download Tailwind \(expectedVersion). Falling back to cached binary at \(cachedBinary.pathString). Error: \(error.localizedDescription)")
+                return cachedBinary
+            }
             throw error
         }
-        logger.info("Checksum validation succeeded for Tailwind \(expectedVersion).")
-        return binaryPath
     }
 
     private func downloadBinary(name: String,
@@ -131,6 +157,30 @@ final class Downloader: Downloading, @unchecked Sendable {
 
     private func downloadChecksumFile(version: String, into downloadPath: AbsolutePath) async throws {
         try await downloadBinary(name: Self.sha256FileName, version: version, to: downloadPath)
+    }
+
+    private func cachedBinaryPath(binaryName: String, in directory: AbsolutePath, excluding excludedVersion: String? = nil) -> AbsolutePath? {
+        guard FileManager.default.fileExists(atPath: directory.pathString) else {
+            return nil
+        }
+
+        guard let versionDirectories = try? FileManager.default.contentsOfDirectory(atPath: directory.pathString) else {
+            return nil
+        }
+
+        for version in versionDirectories.sorted(by: versionSortDescending) where version != excludedVersion {
+            let binaryPath = directory.appending(components: [version, binaryName])
+            if localFileSystem.exists(binaryPath) {
+                try? localFileSystem.chmod(.executable, path: binaryPath)
+                return binaryPath
+            }
+        }
+
+        return nil
+    }
+
+    private func versionSortDescending(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.localizedStandardCompare(rhs) == .orderedDescending
     }
 
     /// Returns the version that should be downloaded.
